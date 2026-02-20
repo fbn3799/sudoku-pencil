@@ -1,41 +1,37 @@
 import Foundation
 import Combine
 
+/// Cell highlight state for animations.
+enum CellHighlight: Equatable {
+    case none
+    case active       // grey: drawing in progress / just tapped
+    case correct      // green flash
+    case wrong        // red flash
+}
+
 /// Represents a single cell on the Sudoku board.
 struct SudokuCell: Identifiable, Equatable {
     let id = UUID()
     let row: Int
     let col: Int
-    /// The correct solution value (1-9).
     let solution: Int
-    /// Whether this cell was pre-filled (given clue).
     let isGiven: Bool
-    /// The player's current answer (nil = empty).
     var playerValue: Int?
-    /// Whether the cell is currently selected.
-    var isSelected: Bool = false
-    /// Temporarily true when a wrong answer was just entered (for flash animation).
-    var isFlashingWrong: Bool = false
-    /// The wrong value being shown during flash.
-    var flashValue: Int?
+    var highlight: CellHighlight = .none
 
     var isEmpty: Bool { !isGiven && playerValue == nil }
     var isCorrect: Bool { playerValue == solution }
     var isFilled: Bool { isGiven || playerValue != nil }
-    var displayValue: Int? {
-        if isGiven { return solution }
-        if let fv = flashValue { return fv }
-        return playerValue
-    }
+    var displayValue: Int? { isGiven ? solution : playerValue }
 }
 
 /// Full 9×9 Sudoku board with puzzle generation.
 class SudokuBoard: ObservableObject {
     @Published var cells: [[SudokuCell]]
     @Published var selectedCell: (row: Int, col: Int)?
-    let difficulty: Difficulty
+    @Published var difficulty: Difficulty
 
-    enum Difficulty: String, CaseIterable {
+    enum Difficulty: String, CaseIterable, Codable {
         case easy, medium, hard
 
         var cellsToRemove: Int {
@@ -56,7 +52,7 @@ class SudokuBoard: ObservableObject {
 
     // MARK: - Puzzle Generation
 
-    private func generatePuzzle() {
+    func generatePuzzle() {
         var grid = Array(repeating: Array(repeating: 0, count: 9), count: 9)
         _ = fillGrid(&grid)
 
@@ -71,15 +67,12 @@ class SudokuBoard: ObservableObject {
             for c in 0..<9 {
                 let idx = r * 9 + c
                 let isGiven = !removed.contains(idx)
-                row.append(SudokuCell(
-                    row: r, col: c,
-                    solution: grid[r][c],
-                    isGiven: isGiven
-                ))
+                row.append(SudokuCell(row: r, col: c, solution: grid[r][c], isGiven: isGiven))
             }
             newCells.append(row)
         }
         cells = newCells
+        selectedCell = nil
     }
 
     private func fillGrid(_ grid: inout [[Int]]) -> Bool {
@@ -115,7 +108,12 @@ class SudokuBoard: ObservableObject {
     // MARK: - Player Actions
 
     func select(row: Int, col: Int) {
+        // Clear previous highlight.
+        if let prev = selectedCell {
+            cells[prev.row][prev.col].highlight = .none
+        }
         selectedCell = (row, col)
+        cells[row][col].highlight = .active
     }
 
     func placeNumber(_ number: Int) {
@@ -127,16 +125,33 @@ class SudokuBoard: ObservableObject {
         guard !cells[row][col].isGiven else { return }
 
         if number == cells[row][col].solution {
-            // Correct: place it permanently.
+            // Correct: flash green briefly, then place.
+            cells[row][col].highlight = .correct
             cells[row][col].playerValue = number
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
+                self?.cells[row][col].highlight = .none
+            }
         } else {
-            // Wrong: flash red then fade out.
-            cells[row][col].flashValue = number
-            cells[row][col].isFlashingWrong = true
-
+            // Wrong: flash red, then fade out.
+            cells[row][col].highlight = .wrong
+            cells[row][col].playerValue = number
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
-                self?.cells[row][col].flashValue = nil
-                self?.cells[row][col].isFlashingWrong = false
+                self?.cells[row][col].playerValue = nil
+                self?.cells[row][col].highlight = .none
+            }
+        }
+    }
+
+    /// Mark cell as active (drawing in progress).
+    func highlightCell(row: Int, col: Int) {
+        cells[row][col].highlight = .active
+    }
+
+    /// Clear highlight without placing a number (unrecognized stroke).
+    func fadeHighlight(row: Int, col: Int) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+            if self?.cells[row][col].highlight == .active {
+                self?.cells[row][col].highlight = .none
             }
         }
     }
@@ -158,5 +173,40 @@ class SudokuBoard: ObservableObject {
                 cell.isGiven || cell.playerValue == cell.solution
             }
         }
+    }
+
+    // MARK: - Save/Restore
+
+    func toSavedGame() -> SavedGame {
+        SavedGame(
+            id: UUID(),
+            date: Date(),
+            difficulty: difficulty.rawValue,
+            solutions: cells.flatMap { $0.map { $0.solution } },
+            givens: cells.flatMap { $0.map { $0.isGiven } },
+            playerValues: cells.flatMap { $0.map { $0.playerValue } }
+        )
+    }
+
+    func restore(from saved: SavedGame) {
+        guard let diff = Difficulty(rawValue: saved.difficulty) else { return }
+        self.difficulty = diff
+        var newCells: [[SudokuCell]] = []
+        for r in 0..<9 {
+            var row: [SudokuCell] = []
+            for c in 0..<9 {
+                let idx = r * 9 + c
+                var cell = SudokuCell(
+                    row: r, col: c,
+                    solution: saved.solutions[idx],
+                    isGiven: saved.givens[idx]
+                )
+                cell.playerValue = saved.playerValues[idx]
+                row.append(cell)
+            }
+            newCells.append(row)
+        }
+        cells = newCells
+        selectedCell = nil
     }
 }

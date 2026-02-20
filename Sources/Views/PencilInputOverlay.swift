@@ -1,20 +1,20 @@
 import SwiftUI
 import PencilKit
 
-/// Transparent PencilKit canvas that overlays the entire grid.
-/// Strokes are drawn in-place; after a pause, the cell under the stroke is detected,
-/// the digit is recognized, and placed into the board.
+/// Transparent PencilKit canvas overlaying the entire grid.
+/// In normal mode: recognizes digits. In note mode: free drawing with selected color/eraser.
 struct PencilInputOverlay: UIViewRepresentable {
     @ObservedObject var board: SudokuBoard
+    @ObservedObject var noteMode: NoteModeState
     let cellSize: CGFloat
-    let gridOrigin: CGPoint  // top-left of the 9×9 cell area in overlay coords
+    let gridOrigin: CGPoint
 
     func makeUIView(context: Context) -> PKCanvasView {
         let canvas = PKCanvasView()
         canvas.backgroundColor = .clear
         canvas.isOpaque = false
         canvas.drawingPolicy = .pencilOnly
-        canvas.tool = PKInkingTool(.pen, color: .systemBlue, width: 3.5)
+        canvas.tool = PKInkingTool(.pen, color: .label, width: 3.5)
         canvas.delegate = context.coordinator
         return canvas
     }
@@ -23,32 +23,55 @@ struct PencilInputOverlay: UIViewRepresentable {
         context.coordinator.cellSize = cellSize
         context.coordinator.gridOrigin = gridOrigin
         context.coordinator.board = board
+        context.coordinator.noteMode = noteMode
+
+        if noteMode.isActive {
+            if noteMode.isErasing {
+                uiView.tool = PKEraserTool(.vector)
+            } else {
+                let uiColor = UIColor(noteMode.selectedColor)
+                uiView.tool = PKInkingTool(.pen, color: uiColor, width: 2.5)
+            }
+            // In note mode, keep strokes visible (don't auto-clear).
+            context.coordinator.isNoteMode = true
+        } else {
+            // Normal mode: primary color, auto-recognize.
+            uiView.tool = PKInkingTool(.pen, color: .label, width: 3.5)
+            context.coordinator.isNoteMode = false
+        }
     }
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(board: board, cellSize: cellSize, gridOrigin: gridOrigin)
+        Coordinator(board: board, noteMode: noteMode, cellSize: cellSize, gridOrigin: gridOrigin)
     }
 
     class Coordinator: NSObject, PKCanvasViewDelegate {
         var board: SudokuBoard
+        var noteMode: NoteModeState
         var cellSize: CGFloat
         var gridOrigin: CGPoint
+        var isNoteMode: Bool = false
         private var recognitionTimer: Timer?
+        /// Strokes that belong to note mode (preserved across clears).
+        var noteDrawing: PKDrawing = PKDrawing()
 
-        init(board: SudokuBoard, cellSize: CGFloat, gridOrigin: CGPoint) {
+        init(board: SudokuBoard, noteMode: NoteModeState, cellSize: CGFloat, gridOrigin: CGPoint) {
             self.board = board
+            self.noteMode = noteMode
             self.cellSize = cellSize
             self.gridOrigin = gridOrigin
         }
 
         func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
+            // In note mode, don't recognize — just let the user draw freely.
+            guard !isNoteMode else { return }
+
             recognitionTimer?.invalidate()
             recognitionTimer = Timer.scheduledTimer(withTimeInterval: 0.8, repeats: false) { [weak self] _ in
                 guard let self = self else { return }
                 let drawing = canvasView.drawing
                 guard !drawing.strokes.isEmpty else { return }
 
-                // Find which cell the strokes center on.
                 let bounds = drawing.bounds
                 let centerX = bounds.midX - self.gridOrigin.x
                 let centerY = bounds.midY - self.gridOrigin.y
@@ -61,21 +84,22 @@ struct PencilInputOverlay: UIViewRepresentable {
                     return
                 }
 
-                // Don't overwrite given cells.
                 guard !self.board.cells[row][col].isGiven else {
                     self.fadeAndClear(canvasView)
                     return
                 }
 
-                // Select the cell visually.
+                // Highlight cell grey while recognizing.
                 DispatchQueue.main.async {
                     self.board.select(row: row, col: col)
                 }
 
-                // Recognize the digit and place directly into the detected cell.
                 DigitRecognizer.recognize(drawing: drawing) { digit in
                     if let digit = digit {
                         self.board.placeNumber(digit, atRow: row, col: col)
+                    } else {
+                        // Unrecognized: fade the grey highlight.
+                        self.board.fadeHighlight(row: row, col: col)
                     }
                     self.fadeAndClear(canvasView)
                 }
@@ -83,12 +107,16 @@ struct PencilInputOverlay: UIViewRepresentable {
         }
 
         private func fadeAndClear(_ canvasView: PKCanvasView) {
-            UIView.animate(withDuration: 0.35, animations: {
+            UIView.animate(withDuration: 0.3, animations: {
                 canvasView.alpha = 0.0
             }, completion: { _ in
                 canvasView.drawing = PKDrawing()
                 canvasView.alpha = 1.0
             })
+        }
+
+        func eraseAll(_ canvasView: PKCanvasView) {
+            canvasView.drawing = PKDrawing()
         }
     }
 }
