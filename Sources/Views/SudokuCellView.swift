@@ -17,18 +17,20 @@ struct SudokuCellView: View {
                 Text("\(value)")
                     .font(.system(size: cellSize * 0.5, weight: cell.isGiven ? .bold : .regular, design: .rounded))
                     .foregroundColor(textColor)
+                    .opacity(cell.isFlashingWrong ? 0.8 : 1.0)
             }
         }
         .frame(width: cellSize, height: cellSize)
+        .animation(.easeOut(duration: 0.5), value: cell.isFlashingWrong)
         .onTapGesture(perform: onTap)
     }
 
     private var backgroundColor: Color {
+        if cell.isFlashingWrong {
+            return Color.red.opacity(0.35)
+        }
         if isSelected {
             return Color.blue.opacity(0.25)
-        }
-        if let sel = cell.playerValue, sel != cell.solution, !cell.isGiven {
-            return Color.red.opacity(0.12)
         }
         // Alternate 3×3 box shading
         let boxShaded = ((cell.row / 3) + (cell.col / 3)) % 2 == 0
@@ -37,7 +39,7 @@ struct SudokuCellView: View {
 
     private var textColor: Color {
         if cell.isGiven { return .primary }
-        if let pv = cell.playerValue, pv != cell.solution { return .red }
+        if cell.isFlashingWrong { return .red }
         return .blue
     }
 }

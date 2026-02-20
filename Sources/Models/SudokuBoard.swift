@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 
 /// Represents a single cell on the Sudoku board.
 struct SudokuCell: Identifiable, Equatable {
@@ -13,11 +14,19 @@ struct SudokuCell: Identifiable, Equatable {
     var playerValue: Int?
     /// Whether the cell is currently selected.
     var isSelected: Bool = false
+    /// Temporarily true when a wrong answer was just entered (for flash animation).
+    var isFlashingWrong: Bool = false
+    /// The wrong value being shown during flash.
+    var flashValue: Int?
 
     var isEmpty: Bool { !isGiven && playerValue == nil }
     var isCorrect: Bool { playerValue == solution }
     var isFilled: Bool { isGiven || playerValue != nil }
-    var displayValue: Int? { isGiven ? solution : playerValue }
+    var displayValue: Int? {
+        if isGiven { return solution }
+        if let fv = flashValue { return fv }
+        return playerValue
+    }
 }
 
 /// Full 9×9 Sudoku board with puzzle generation.
@@ -51,11 +60,9 @@ class SudokuBoard: ObservableObject {
         var grid = Array(repeating: Array(repeating: 0, count: 9), count: 9)
         _ = fillGrid(&grid)
 
-        // Determine which cells are given (not removed).
         var removed = Set<Int>()
-        let totalCells = 81
         while removed.count < difficulty.cellsToRemove {
-            removed.insert(Int.random(in: 0..<totalCells))
+            removed.insert(Int.random(in: 0..<81))
         }
 
         var newCells: [[SudokuCell]] = []
@@ -67,8 +74,7 @@ class SudokuBoard: ObservableObject {
                 row.append(SudokuCell(
                     row: r, col: c,
                     solution: grid[r][c],
-                    isGiven: isGiven,
-                    playerValue: isGiven ? nil : nil
+                    isGiven: isGiven
                 ))
             }
             newCells.append(row)
@@ -95,11 +101,8 @@ class SudokuBoard: ObservableObject {
     }
 
     private func isValid(_ grid: [[Int]], row: Int, col: Int, num: Int) -> Bool {
-        // Row check
         if grid[row].contains(num) { return false }
-        // Column check
         if grid.map({ $0[col] }).contains(num) { return false }
-        // Box check
         let br = (row / 3) * 3, bc = (col / 3) * 3
         for r in br..<br+3 {
             for c in bc..<bc+3 {
@@ -122,7 +125,20 @@ class SudokuBoard: ObservableObject {
 
     func placeNumber(_ number: Int, atRow row: Int, col: Int) {
         guard !cells[row][col].isGiven else { return }
-        cells[row][col].playerValue = number
+
+        if number == cells[row][col].solution {
+            // Correct: place it permanently.
+            cells[row][col].playerValue = number
+        } else {
+            // Wrong: flash red then fade out.
+            cells[row][col].flashValue = number
+            cells[row][col].isFlashingWrong = true
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+                self?.cells[row][col].flashValue = nil
+                self?.cells[row][col].isFlashingWrong = false
+            }
+        }
     }
 
     func clearSelected() {
