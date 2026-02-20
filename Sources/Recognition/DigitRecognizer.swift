@@ -12,52 +12,60 @@ class DigitRecognizer {
             return
         }
 
-        // Render the drawing to an image with padding.
-        let padding: CGFloat = 20
-        let size = CGSize(
-            width: max(bounds.width, bounds.height) + padding * 2,
-            height: max(bounds.width, bounds.height) + padding * 2
+        // Render with padding into a square image using PencilKit's own renderer.
+        let padding: CGFloat = 30
+        let side = max(bounds.width, bounds.height) + padding * 2
+        let renderRect = CGRect(
+            x: bounds.midX - side / 2,
+            y: bounds.midY - side / 2,
+            width: side,
+            height: side
         )
 
-        let renderer = UIGraphicsImageRenderer(size: size)
-        let image = renderer.image { ctx in
-            ctx.cgContext.setFillColor(UIColor.white.cgColor)
-            ctx.cgContext.fill(CGRect(origin: .zero, size: size))
+        // PencilKit renders strokes as dark on transparent; we need dark on white.
+        let traitCollection = UITraitCollection(userInterfaceStyle: .light)
+        let strokeImage = drawing.image(from: renderRect, scale: 2.0, userInterfaceStyle: traitCollection)
 
-            let offsetX = (size.width - bounds.width) / 2 - bounds.origin.x
-            let offsetY = (size.height - bounds.height) / 2 - bounds.origin.y
-            ctx.cgContext.translateBy(x: offsetX, y: offsetY)
-
-            let drawingImage = drawing.image(from: drawing.bounds, scale: 2.0)
-            drawingImage.draw(in: drawing.bounds)
+        // Composite onto white background.
+        let renderer = UIGraphicsImageRenderer(size: strokeImage.size)
+        let finalImage = renderer.image { ctx in
+            UIColor.white.setFill()
+            ctx.fill(CGRect(origin: .zero, size: strokeImage.size))
+            strokeImage.draw(at: .zero)
         }
 
-        guard let cgImage = image.cgImage else {
+        guard let cgImage = finalImage.cgImage else {
             completion(nil)
             return
         }
 
         // Use Vision text recognition.
         let request = VNRecognizeTextRequest { request, error in
-            guard error == nil,
-                  let results = request.results as? [VNRecognizedTextObservation],
-                  let topCandidate = results.first?.topCandidates(1).first else {
-                completion(nil)
-                return
-            }
+            let result: Int? = {
+                guard error == nil,
+                      let observations = request.results as? [VNRecognizedTextObservation] else {
+                    return nil
+                }
 
-            let text = topCandidate.string.trimmingCharacters(in: .whitespacesAndNewlines)
-            // Extract single digit 1-9.
-            if let digit = Int(text), (1...9).contains(digit) {
-                completion(digit)
-            } else {
-                completion(nil)
+                // Check all candidates for a single digit.
+                for obs in observations {
+                    for candidate in obs.topCandidates(5) {
+                        let text = candidate.string.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if let digit = Int(text), (1...9).contains(digit) {
+                            return digit
+                        }
+                    }
+                }
+                return nil
+            }()
+
+            DispatchQueue.main.async {
+                completion(result)
             }
         }
 
         request.recognitionLevel = .accurate
         request.usesLanguageCorrection = false
-        // Constrain to digits only.
         request.customWords = ["1", "2", "3", "4", "5", "6", "7", "8", "9"]
 
         let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])

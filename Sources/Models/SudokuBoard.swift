@@ -117,8 +117,12 @@ class SudokuBoard: ObservableObject {
 
     func placeNumber(_ number: Int) {
         guard let sel = selectedCell else { return }
-        guard !cells[sel.row][sel.col].isGiven else { return }
-        cells[sel.row][sel.col].playerValue = number
+        placeNumber(number, atRow: sel.row, col: sel.col)
+    }
+
+    func placeNumber(_ number: Int, atRow row: Int, col: Int) {
+        guard !cells[row][col].isGiven else { return }
+        cells[row][col].playerValue = number
     }
 
     func clearSelected() {

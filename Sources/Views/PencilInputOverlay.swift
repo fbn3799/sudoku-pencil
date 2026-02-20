@@ -72,15 +72,12 @@ struct PencilInputOverlay: UIViewRepresentable {
                     self.board.select(row: row, col: col)
                 }
 
-                // Recognize the digit.
+                // Recognize the digit and place directly into the detected cell.
                 DigitRecognizer.recognize(drawing: drawing) { digit in
-                    DispatchQueue.main.async {
-                        if let digit = digit {
-                            self.board.placeNumber(digit)
-                        }
-                        // Fade out strokes, then clear.
-                        self.fadeAndClear(canvasView)
+                    if let digit = digit {
+                        self.board.placeNumber(digit, atRow: row, col: col)
                     }
+                    self.fadeAndClear(canvasView)
                 }
             }
         }
