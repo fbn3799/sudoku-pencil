@@ -107,6 +107,9 @@ class SudokuBoard: ObservableObject {
 
     // MARK: - Player Actions
 
+    /// Whether numpad is active — when true, selection persists until a number is placed or another cell is tapped.
+    var numpadActive: Bool = false
+
     func select(row: Int, col: Int) {
         // Clear previous highlight.
         if let prev = selectedCell {
@@ -115,12 +118,14 @@ class SudokuBoard: ObservableObject {
         selectedCell = (row, col)
         cells[row][col].highlight = .active
 
-        // Auto-fade after 3 seconds if still just active (no number placed).
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
-            if self?.cells[row][col].highlight == .active &&
-               self?.selectedCell?.row == row && self?.selectedCell?.col == col {
-                self?.cells[row][col].highlight = .none
-                self?.selectedCell = nil
+        // Auto-fade only when numpad is hidden (pencil-only mode).
+        if !numpadActive {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
+                if self?.cells[row][col].highlight == .active &&
+                   self?.selectedCell?.row == row && self?.selectedCell?.col == col {
+                    self?.cells[row][col].highlight = .none
+                    self?.selectedCell = nil
+                }
             }
         }
     }

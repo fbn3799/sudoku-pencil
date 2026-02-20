@@ -124,6 +124,8 @@ struct ContentView: View {
             // Numpad toggle
             Button {
                 showNumpad.toggle()
+                board.numpadActive = showNumpad
+                if !showNumpad { board.clearAllHighlights() }
             } label: {
                 Image(systemName: showNumpad ? "number.circle.fill" : "number.circle")
                     .font(.title2)
