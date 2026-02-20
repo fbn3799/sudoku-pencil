@@ -23,8 +23,14 @@ class DigitRecognizer {
         )
 
         // PencilKit renders strokes as dark on transparent; we need dark on white.
-        let traitCollection = UITraitCollection(userInterfaceStyle: .light)
-        let strokeImage = drawing.image(from: renderRect, scale: 2.0, userInterfaceStyle: traitCollection)
+        let strokeImage: UIImage = {
+            let tc = UITraitCollection(userInterfaceStyle: .light)
+            var img: UIImage!
+            tc.performAsCurrent {
+                img = drawing.image(from: renderRect, scale: 2.0)
+            }
+            return img
+        }()
 
         // Composite onto white background.
         let renderer = UIGraphicsImageRenderer(size: strokeImage.size)
