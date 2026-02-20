@@ -12,44 +12,51 @@ struct ContentView: View {
     var body: some View {
         GeometryReader { geo in
             let isLandscape = geo.size.width > geo.size.height
-            let gridSide = gridSize(for: geo.size, landscape: isLandscape)
+            let side = gridSide(for: geo.size, landscape: isLandscape)
+            let cs = side / 9
 
-            if isLandscape {
-                HStack(spacing: 0) {
-                    // Grid centered in its half
-                    gridArea(cellSize: gridSide / 9)
-                        .frame(width: geo.size.width * 0.6)
+            ZStack {
+                // Grid — always dead center of screen
+                gridArea(cellSize: cs)
+                    .position(x: geo.size.width / 2, y: geo.size.height / 2)
 
-                    // Controls on the right
-                    VStack(spacing: 20) {
+                // Controls positioned around the grid
+                if isLandscape {
+                    // Toolbar top-right
+                    VStack {
                         toolbarButtons
-                        Spacer()
-                        controlsPanel(landscape: true)
+                            .padding()
                         Spacer()
                     }
-                    .frame(width: geo.size.width * 0.4)
-                    .padding()
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+
+                    // Number pad / note panel right of grid
+                    HStack {
+                        Spacer()
+                        controlsPanel(landscape: true)
+                            .padding(.trailing, 24)
+                    }
+                } else {
+                    VStack {
+                        toolbarButtons
+                            .padding(.horizontal)
+                            .padding(.top, 8)
+
+                        Spacer()
+
+                        controlsPanel(landscape: false)
+                            .padding(.horizontal)
+                            .padding(.bottom, 16)
+                    }
                 }
-            } else {
-                VStack(spacing: 16) {
-                    toolbarButtons
-                        .padding(.horizontal)
-                    Spacer()
-                    gridArea(cellSize: gridSide / 9)
-                    Spacer()
-                    controlsPanel(landscape: false)
-                        .padding(.horizontal)
-                        .padding(.bottom, 12)
+
+                // Note mode edge glow
+                if noteMode.isActive {
+                    Rectangle()
+                        .stroke(noteMode.selectedColor.opacity(0.3), lineWidth: 4)
+                        .ignoresSafeArea()
+                        .allowsHitTesting(false)
                 }
-            }
-        }
-        .overlay {
-            // Note mode edge glow
-            if noteMode.isActive {
-                Rectangle()
-                    .stroke(noteMode.selectedColor.opacity(0.3), lineWidth: 4)
-                    .ignoresSafeArea()
-                    .allowsHitTesting(false)
             }
         }
         .animation(.easeInOut(duration: 0.25), value: noteMode.isActive)
@@ -73,20 +80,18 @@ struct ContentView: View {
         .preferredColorScheme(resolvedColorScheme)
     }
 
-    // MARK: - Grid size calculation
+    // MARK: - Grid sizing
 
-    private func gridSize(for size: CGSize, landscape: Bool) -> CGFloat {
+    private func gridSide(for size: CGSize, landscape: Bool) -> CGFloat {
+        // Take the smaller dimension, leave room for controls
         if landscape {
-            // Use available height minus padding
-            let available = size.height - 40
-            return min(available, size.width * 0.55)
+            return size.height - 60
         } else {
-            // Use width minus padding, capped
-            return min(size.width - 32, size.height * 0.6)
+            return min(size.width - 32, size.height - 200)
         }
     }
 
-    // MARK: - Grid + overlay, always a centered perfect square
+    // MARK: - Grid
 
     private func gridArea(cellSize: CGFloat) -> some View {
         let side = cellSize * 9
@@ -105,7 +110,7 @@ struct ContentView: View {
         .frame(width: side, height: side)
     }
 
-    // MARK: - Toolbar buttons
+    // MARK: - Toolbar
 
     private var toolbarButtons: some View {
         HStack(spacing: 20) {
@@ -120,8 +125,7 @@ struct ContentView: View {
                     }
                 }
             } label: {
-                Image(systemName: "slider.horizontal.3")
-                    .font(.title3)
+                Image(systemName: "slider.horizontal.3").font(.title3)
             }
 
             Spacer()
@@ -135,23 +139,20 @@ struct ContentView: View {
             }
 
             Button { saveAndNewGame() } label: {
-                Image(systemName: "arrow.triangle.2.circlepath")
-                    .font(.title3)
+                Image(systemName: "arrow.triangle.2.circlepath").font(.title3)
             }
 
             Button { showHistory = true } label: {
-                Image(systemName: "clock.arrow.circlepath")
-                    .font(.title3)
+                Image(systemName: "clock.arrow.circlepath").font(.title3)
             }
 
             Button { showSettings = true } label: {
-                Image(systemName: "gearshape")
-                    .font(.title3)
+                Image(systemName: "gearshape").font(.title3)
             }
         }
     }
 
-    // MARK: - Bottom/side controls
+    // MARK: - Controls
 
     @ViewBuilder
     private func controlsPanel(landscape: Bool) -> some View {
@@ -160,7 +161,6 @@ struct ContentView: View {
                 noteMode.deactivate()
                 noteMode.activate()
             }
-            .transition(.move(edge: .bottom).combined(with: .opacity))
         } else {
             NumberPadView(board: board, axis: landscape ? .vertical : .horizontal)
         }
