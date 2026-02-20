@@ -114,6 +114,15 @@ class SudokuBoard: ObservableObject {
         }
         selectedCell = (row, col)
         cells[row][col].highlight = .active
+
+        // Auto-fade after 3 seconds if still just active (no number placed).
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
+            if self?.cells[row][col].highlight == .active &&
+               self?.selectedCell?.row == row && self?.selectedCell?.col == col {
+                self?.cells[row][col].highlight = .none
+                self?.selectedCell = nil
+            }
+        }
     }
 
     func placeNumber(_ number: Int) {

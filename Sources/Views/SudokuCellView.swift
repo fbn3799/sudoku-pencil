@@ -28,7 +28,7 @@ struct SudokuCellView: View {
         case .wrong:
             return Color.red.opacity(0.35)
         case .active:
-            return Color.gray.opacity(0.2)
+            return Color.gray.opacity(0.35)
         case .none:
             let boxShaded = ((cell.row / 3) + (cell.col / 3)) % 2 == 0
             return boxShaded ? Color(.systemBackground) : Color(.secondarySystemBackground)
