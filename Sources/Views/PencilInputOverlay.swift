@@ -2,7 +2,6 @@ import SwiftUI
 import PencilKit
 
 /// Transparent PencilKit canvas overlaying the entire grid.
-/// In normal mode: recognizes digits. In note mode: free drawing with selected color/eraser.
 struct PencilInputOverlay: UIViewRepresentable {
     @ObservedObject var board: SudokuBoard
     @ObservedObject var noteMode: NoteModeState
@@ -10,17 +9,12 @@ struct PencilInputOverlay: UIViewRepresentable {
     let cellSize: CGFloat
     let gridOrigin: CGPoint
 
-    /// Stroke color that matches the number color (adapts to light/dark).
-    private var strokeUIColor: UIColor {
-        colorScheme == .dark ? .white : .black
-    }
-
     func makeUIView(context: Context) -> PKCanvasView {
         let canvas = PKCanvasView()
         canvas.backgroundColor = .clear
         canvas.isOpaque = false
         canvas.drawingPolicy = .pencilOnly
-        canvas.tool = PKInkingTool(.pen, color: strokeUIColor, width: 3.5)
+        updateTool(canvas, context: context)
         canvas.delegate = context.coordinator
         return canvas
     }
@@ -30,19 +24,21 @@ struct PencilInputOverlay: UIViewRepresentable {
         context.coordinator.gridOrigin = gridOrigin
         context.coordinator.board = board
         context.coordinator.noteMode = noteMode
+        context.coordinator.isNoteMode = noteMode.isActive
+        updateTool(uiView, context: context)
+    }
 
+    private func updateTool(_ canvas: PKCanvasView, context: Context) {
         if noteMode.isActive {
             if noteMode.isErasing {
-                uiView.tool = PKEraserTool(.vector)
+                canvas.tool = PKEraserTool(.vector)
             } else {
-                let uiColor = UIColor(noteMode.selectedColor)
-                uiView.tool = PKInkingTool(.pen, color: uiColor, width: 2.5)
+                canvas.tool = PKInkingTool(.pen, color: UIColor(noteMode.selectedColor), width: 2.5)
             }
-            context.coordinator.isNoteMode = true
         } else {
-            // Normal mode: match number color for current color scheme.
-            uiView.tool = PKInkingTool(.pen, color: strokeUIColor, width: 3.5)
-            context.coordinator.isNoteMode = false
+            // Explicit white/black based on current color scheme.
+            let color: UIColor = colorScheme == .dark ? .white : .black
+            canvas.tool = PKInkingTool(.pen, color: color, width: 4)
         }
     }
 
@@ -96,7 +92,7 @@ struct PencilInputOverlay: UIViewRepresentable {
                 }
 
                 DigitRecognizer.recognize(drawing: drawing) { digit in
-                    if let digit = digit {
+                    if let digit = digit, (1...9).contains(digit) {
                         self.board.placeNumber(digit, atRow: row, col: col)
                     } else {
                         self.board.fadeHighlight(row: row, col: col)

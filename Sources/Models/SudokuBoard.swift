@@ -162,6 +162,15 @@ class SudokuBoard: ObservableObject {
         cells[sel.row][sel.col].playerValue = nil
     }
 
+    func clearAllHighlights() {
+        for r in 0..<9 {
+            for c in 0..<9 {
+                cells[r][c].highlight = .none
+            }
+        }
+        selectedCell = nil
+    }
+
     func newGame() {
         selectedCell = nil
         generatePuzzle()

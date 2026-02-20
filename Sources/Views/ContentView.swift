@@ -8,38 +8,48 @@ struct ContentView: View {
     @State private var showHistory = false
     @State private var showSettings = false
     @AppStorage("app_color_scheme") private var colorSchemePreference: String = "system"
-    @Environment(\.horizontalSizeClass) private var hSize
-    @Environment(\.verticalSizeClass) private var vSize
-
-    private var isLandscape: Bool { vSize == .compact }
-
-    private var cellSize: CGFloat {
-        if isLandscape {
-            let screenH = UIScreen.main.bounds.height
-            return min((screenH - 80) / 9, 64)
-        } else {
-            let screenW = min(UIScreen.main.bounds.width, UIScreen.main.bounds.height)
-            return min((screenW - 60) / 9, 72)
-        }
-    }
 
     var body: some View {
-        ZStack {
-            // Note mode edge indicator
-            if noteMode.isActive {
-                Color.clear
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 0)
-                            .stroke(noteMode.selectedColor.opacity(0.3), lineWidth: 4)
-                    )
-                    .ignoresSafeArea()
-                    .allowsHitTesting(false)
-            }
+        GeometryReader { geo in
+            let isLandscape = geo.size.width > geo.size.height
+            let gridSide = gridSize(for: geo.size, landscape: isLandscape)
 
             if isLandscape {
-                landscapeLayout
+                HStack(spacing: 0) {
+                    // Grid centered in its half
+                    gridArea(cellSize: gridSide / 9)
+                        .frame(width: geo.size.width * 0.6)
+
+                    // Controls on the right
+                    VStack(spacing: 20) {
+                        toolbarButtons
+                        Spacer()
+                        controlsPanel(landscape: true)
+                        Spacer()
+                    }
+                    .frame(width: geo.size.width * 0.4)
+                    .padding()
+                }
             } else {
-                portraitLayout
+                VStack(spacing: 16) {
+                    toolbarButtons
+                        .padding(.horizontal)
+                    Spacer()
+                    gridArea(cellSize: gridSide / 9)
+                    Spacer()
+                    controlsPanel(landscape: false)
+                        .padding(.horizontal)
+                        .padding(.bottom, 12)
+                }
+            }
+        }
+        .overlay {
+            // Note mode edge glow
+            if noteMode.isActive {
+                Rectangle()
+                    .stroke(noteMode.selectedColor.opacity(0.3), lineWidth: 4)
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
             }
         }
         .animation(.easeInOut(duration: 0.25), value: noteMode.isActive)
@@ -63,79 +73,42 @@ struct ContentView: View {
         .preferredColorScheme(resolvedColorScheme)
     }
 
-    // MARK: - Portrait
+    // MARK: - Grid size calculation
 
-    private var portraitLayout: some View {
-        VStack(spacing: 16) {
-            toolbar
-
-            Spacer()
-
-            gridWithOverlay
-
-            Spacer()
-
-            bottomControls
-                .padding(.bottom, 8)
+    private func gridSize(for size: CGSize, landscape: Bool) -> CGFloat {
+        if landscape {
+            // Use available height minus padding
+            let available = size.height - 40
+            return min(available, size.width * 0.55)
+        } else {
+            // Use width minus padding, capped
+            return min(size.width - 32, size.height * 0.6)
         }
-        .padding(.horizontal)
     }
 
-    // MARK: - Landscape
+    // MARK: - Grid + overlay, always a centered perfect square
 
-    private var landscapeLayout: some View {
-        HStack(spacing: 20) {
-            // Left side: grid
-            VStack {
-                Spacer()
-                gridWithOverlay
-                Spacer()
-            }
-
-            // Right side: controls stacked vertically
-            VStack(spacing: 16) {
-                toolbar
-
-                Spacer()
-
-                if noteMode.isActive {
-                    NoteModePanel(noteMode: noteMode) {
-                        noteMode.deactivate()
-                        noteMode.activate()
-                    }
-                } else {
-                    NumberPadView(board: board, axis: .vertical)
-                }
-
-                Spacer()
-            }
-            .frame(maxWidth: 160)
-        }
-        .padding()
-    }
-
-    // MARK: - Shared Components
-
-    private var gridWithOverlay: some View {
-        ZStack {
+    private func gridArea(cellSize: CGFloat) -> some View {
+        let side = cellSize * 9
+        return ZStack {
             SudokuGridView(board: board, cellSize: cellSize)
 
-            GeometryReader { _ in
-                PencilInputOverlay(
-                    board: board,
-                    noteMode: noteMode,
-                    cellSize: cellSize,
-                    gridOrigin: .zero
-                )
-            }
-            .frame(width: cellSize * 9, height: cellSize * 9)
+            PencilInputOverlay(
+                board: board,
+                noteMode: noteMode,
+                cellSize: cellSize,
+                gridOrigin: .zero
+            )
+            .frame(width: side, height: side)
             .allowsHitTesting(true)
         }
+        .frame(width: side, height: side)
     }
 
-    private var toolbar: some View {
-        HStack(spacing: 16) {
-            // Difficulty
+    // MARK: - Toolbar buttons
+
+    private var toolbarButtons: some View {
+        HStack(spacing: 20) {
             Menu {
                 ForEach(SudokuBoard.Difficulty.allCases, id: \.self) { diff in
                     Button {
@@ -153,7 +126,6 @@ struct ContentView: View {
 
             Spacer()
 
-            // Note mode
             Button {
                 noteMode.isActive ? noteMode.deactivate() : noteMode.activate()
             } label: {
@@ -162,19 +134,16 @@ struct ContentView: View {
                     .foregroundColor(noteMode.isActive ? noteMode.selectedColor : .secondary)
             }
 
-            // New game
             Button { saveAndNewGame() } label: {
                 Image(systemName: "arrow.triangle.2.circlepath")
                     .font(.title3)
             }
 
-            // History
             Button { showHistory = true } label: {
                 Image(systemName: "clock.arrow.circlepath")
                     .font(.title3)
             }
 
-            // Settings
             Button { showSettings = true } label: {
                 Image(systemName: "gearshape")
                     .font(.title3)
@@ -182,17 +151,18 @@ struct ContentView: View {
         }
     }
 
-    private var bottomControls: some View {
-        Group {
-            if noteMode.isActive {
-                NoteModePanel(noteMode: noteMode) {
-                    noteMode.deactivate()
-                    noteMode.activate()
-                }
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-            } else {
-                NumberPadView(board: board, axis: .horizontal)
+    // MARK: - Bottom/side controls
+
+    @ViewBuilder
+    private func controlsPanel(landscape: Bool) -> some View {
+        if noteMode.isActive {
+            NoteModePanel(noteMode: noteMode) {
+                noteMode.deactivate()
+                noteMode.activate()
             }
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+        } else {
+            NumberPadView(board: board, axis: landscape ? .vertical : .horizontal)
         }
     }
 
