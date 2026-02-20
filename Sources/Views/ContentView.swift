@@ -7,6 +7,7 @@ struct ContentView: View {
     @State private var showCongrats = false
     @State private var showHistory = false
     @State private var showSettings = false
+    @State private var showNumpad = false
     @AppStorage("app_color_scheme") private var colorSchemePreference: String = "system"
 
     var body: some View {
@@ -16,37 +17,23 @@ struct ContentView: View {
             let cs = side / 9
 
             ZStack {
-                // Grid — always dead center of screen
+                // Grid — always dead center
                 gridArea(cellSize: cs)
                     .position(x: geo.size.width / 2, y: geo.size.height / 2)
 
-                // Controls positioned around the grid
-                if isLandscape {
-                    // Toolbar top-right
-                    VStack {
-                        toolbarButtons
-                            .padding()
-                        Spacer()
-                    }
-                    .frame(maxWidth: .infinity, alignment: .trailing)
+                // Controls
+                VStack {
+                    toolbarButtons
+                        .padding(.horizontal)
+                        .padding(.top, 8)
 
-                    // Number pad / note panel right of grid
-                    HStack {
-                        Spacer()
-                        controlsPanel(landscape: true)
-                            .padding(.trailing, 24)
-                    }
-                } else {
-                    VStack {
-                        toolbarButtons
-                            .padding(.horizontal)
-                            .padding(.top, 8)
+                    Spacer()
 
-                        Spacer()
-
-                        controlsPanel(landscape: false)
+                    if showNumpad || noteMode.isActive {
+                        controlsPanel(landscape: isLandscape)
                             .padding(.horizontal)
                             .padding(.bottom, 16)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
                 }
 
@@ -58,8 +45,9 @@ struct ContentView: View {
                         .allowsHitTesting(false)
                 }
             }
+            .animation(.easeInOut(duration: 0.25), value: showNumpad)
+            .animation(.easeInOut(duration: 0.25), value: noteMode.isActive)
         }
-        .animation(.easeInOut(duration: 0.25), value: noteMode.isActive)
         .onChange(of: board.isSolved) { _, solved in
             if solved { showCongrats = true }
         }
@@ -75,7 +63,11 @@ struct ContentView: View {
             }
         }
         .sheet(isPresented: $showSettings) {
-            SettingsView(colorSchemePreference: $colorSchemePreference)
+            SettingsView(
+                colorSchemePreference: $colorSchemePreference,
+                board: board,
+                onNewGame: saveAndNewGame
+            )
         }
         .preferredColorScheme(resolvedColorScheme)
     }
@@ -83,7 +75,6 @@ struct ContentView: View {
     // MARK: - Grid sizing
 
     private func gridSide(for size: CGSize, landscape: Bool) -> CGFloat {
-        // Take the smaller dimension, leave room for controls
         if landscape {
             return size.height - 60
         } else {
@@ -110,26 +101,18 @@ struct ContentView: View {
         .frame(width: side, height: side)
     }
 
-    // MARK: - Toolbar
+    // MARK: - Toolbar (settings left, actions right)
 
     private var toolbarButtons: some View {
         HStack(spacing: 20) {
-            Menu {
-                ForEach(SudokuBoard.Difficulty.allCases, id: \.self) { diff in
-                    Button {
-                        saveCurrentGame()
-                        board.difficulty = diff
-                        board.newGame()
-                    } label: {
-                        Label(diff.rawValue.capitalized, systemImage: difficultyIcon(diff))
-                    }
-                }
-            } label: {
-                Image(systemName: "slider.horizontal.3").font(.title3)
+            // Settings (left)
+            Button { showSettings = true } label: {
+                Image(systemName: "gearshape").font(.title3)
             }
 
             Spacer()
 
+            // Note mode
             Button {
                 noteMode.isActive ? noteMode.deactivate() : noteMode.activate()
             } label: {
@@ -138,16 +121,23 @@ struct ContentView: View {
                     .foregroundColor(noteMode.isActive ? noteMode.selectedColor : .secondary)
             }
 
+            // Numpad toggle
+            Button {
+                showNumpad.toggle()
+            } label: {
+                Image(systemName: showNumpad ? "number.circle.fill" : "number.circle")
+                    .font(.title2)
+                    .foregroundColor(showNumpad ? .blue : .secondary)
+            }
+
+            // New game
             Button { saveAndNewGame() } label: {
                 Image(systemName: "arrow.triangle.2.circlepath").font(.title3)
             }
 
+            // History
             Button { showHistory = true } label: {
                 Image(systemName: "clock.arrow.circlepath").font(.title3)
-            }
-
-            Button { showSettings = true } label: {
-                Image(systemName: "gearshape").font(.title3)
             }
         }
     }
@@ -161,8 +151,8 @@ struct ContentView: View {
                 noteMode.deactivate()
                 noteMode.activate()
             }
-        } else {
-            NumberPadView(board: board, axis: landscape ? .vertical : .horizontal)
+        } else if showNumpad {
+            NumberPadView(board: board, axis: .horizontal)
         }
     }
 
@@ -185,14 +175,6 @@ struct ContentView: View {
         let saved = board.toSavedGame()
         if saved.playerValues.contains(where: { $0 != nil }) {
             historyStore.save(game: saved)
-        }
-    }
-
-    private func difficultyIcon(_ diff: SudokuBoard.Difficulty) -> String {
-        switch diff {
-        case .easy: return "1.circle"
-        case .medium: return "2.circle"
-        case .hard: return "3.circle"
         }
     }
 }
