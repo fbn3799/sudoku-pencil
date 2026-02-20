@@ -2,7 +2,6 @@ import SwiftUI
 
 struct ContentView: View {
     @StateObject private var board = SudokuBoard(difficulty: .medium)
-    @State private var showDifficultyPicker = false
     @State private var showCongrats = false
 
     // Adaptive cell size for iPad
@@ -16,11 +15,21 @@ struct ContentView: View {
             VStack(spacing: 24) {
                 Spacer()
 
-                // Sudoku grid
-                SudokuGridView(board: board, cellSize: cellSize)
+                // Grid with pencil overlay on top
+                ZStack {
+                    SudokuGridView(board: board, cellSize: cellSize)
 
-                // Pencil drawing area (appears when cell selected)
-                PencilInputOverlay(board: board)
+                    // Pencil canvas sits on top of the grid, same size
+                    GeometryReader { geo in
+                        PencilInputOverlay(
+                            board: board,
+                            cellSize: cellSize,
+                            gridOrigin: .zero
+                        )
+                    }
+                    .frame(width: cellSize * 9, height: cellSize * 9)
+                    .allowsHitTesting(true)
+                }
 
                 // Number pad (finger fallback)
                 NumberPadView(board: board)
@@ -66,7 +75,6 @@ struct ContentView: View {
     }
 
     private func replaceBoard(with newBoard: SudokuBoard) {
-        // SwiftUI workaround: copy state
         board.cells = newBoard.cells
         board.selectedCell = nil
     }
