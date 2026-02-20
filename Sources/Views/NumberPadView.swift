@@ -1,20 +1,21 @@
 import SwiftUI
 
-/// Fallback number pad for finger input (also works alongside Pencil).
+/// Compact number pad for finger input as alternative to Pencil.
 struct NumberPadView: View {
     @ObservedObject var board: SudokuBoard
+    var axis: Axis = .horizontal
 
     var body: some View {
-        HStack(spacing: 12) {
+        let content = Group {
             ForEach(1...9, id: \.self) { num in
                 Button {
                     board.placeNumber(num)
                 } label: {
                     Text("\(num)")
-                        .font(.title2.weight(.semibold))
-                        .frame(width: 44, height: 44)
-                        .background(Color(.tertiarySystemBackground))
-                        .cornerRadius(10)
+                        .font(.title3.weight(.medium).monospacedDigit())
+                        .frame(width: 40, height: 40)
+                        .background(Color(.tertiarySystemFill))
+                        .cornerRadius(8)
                 }
                 .buttonStyle(.plain)
             }
@@ -22,13 +23,20 @@ struct NumberPadView: View {
             Button {
                 board.clearSelected()
             } label: {
-                Image(systemName: "delete.left")
-                    .font(.title3)
-                    .frame(width: 44, height: 44)
-                    .background(Color.red.opacity(0.15))
-                    .cornerRadius(10)
+                Image(systemName: "delete.backward")
+                    .font(.body.weight(.medium))
+                    .frame(width: 40, height: 40)
+                    .background(Color.red.opacity(0.12))
+                    .cornerRadius(8)
             }
             .buttonStyle(.plain)
+        }
+
+        if axis == .horizontal {
+            HStack(spacing: 8) { content }
+        } else {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 40), spacing: 8)], spacing: 8) { content }
+                .frame(maxWidth: 140)
         }
     }
 }

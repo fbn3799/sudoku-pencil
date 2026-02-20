@@ -6,15 +6,21 @@ import PencilKit
 struct PencilInputOverlay: UIViewRepresentable {
     @ObservedObject var board: SudokuBoard
     @ObservedObject var noteMode: NoteModeState
+    @Environment(\.colorScheme) var colorScheme
     let cellSize: CGFloat
     let gridOrigin: CGPoint
+
+    /// Stroke color that matches the number color (adapts to light/dark).
+    private var strokeUIColor: UIColor {
+        colorScheme == .dark ? .white : .black
+    }
 
     func makeUIView(context: Context) -> PKCanvasView {
         let canvas = PKCanvasView()
         canvas.backgroundColor = .clear
         canvas.isOpaque = false
         canvas.drawingPolicy = .pencilOnly
-        canvas.tool = PKInkingTool(.pen, color: .label, width: 3.5)
+        canvas.tool = PKInkingTool(.pen, color: strokeUIColor, width: 3.5)
         canvas.delegate = context.coordinator
         return canvas
     }
@@ -32,11 +38,10 @@ struct PencilInputOverlay: UIViewRepresentable {
                 let uiColor = UIColor(noteMode.selectedColor)
                 uiView.tool = PKInkingTool(.pen, color: uiColor, width: 2.5)
             }
-            // In note mode, keep strokes visible (don't auto-clear).
             context.coordinator.isNoteMode = true
         } else {
-            // Normal mode: primary color, auto-recognize.
-            uiView.tool = PKInkingTool(.pen, color: .label, width: 3.5)
+            // Normal mode: match number color for current color scheme.
+            uiView.tool = PKInkingTool(.pen, color: strokeUIColor, width: 3.5)
             context.coordinator.isNoteMode = false
         }
     }
@@ -52,8 +57,6 @@ struct PencilInputOverlay: UIViewRepresentable {
         var gridOrigin: CGPoint
         var isNoteMode: Bool = false
         private var recognitionTimer: Timer?
-        /// Strokes that belong to note mode (preserved across clears).
-        var noteDrawing: PKDrawing = PKDrawing()
 
         init(board: SudokuBoard, noteMode: NoteModeState, cellSize: CGFloat, gridOrigin: CGPoint) {
             self.board = board
@@ -63,7 +66,6 @@ struct PencilInputOverlay: UIViewRepresentable {
         }
 
         func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
-            // In note mode, don't recognize — just let the user draw freely.
             guard !isNoteMode else { return }
 
             recognitionTimer?.invalidate()
@@ -89,7 +91,6 @@ struct PencilInputOverlay: UIViewRepresentable {
                     return
                 }
 
-                // Highlight cell grey while recognizing.
                 DispatchQueue.main.async {
                     self.board.select(row: row, col: col)
                 }
@@ -98,7 +99,6 @@ struct PencilInputOverlay: UIViewRepresentable {
                     if let digit = digit {
                         self.board.placeNumber(digit, atRow: row, col: col)
                     } else {
-                        // Unrecognized: fade the grey highlight.
                         self.board.fadeHighlight(row: row, col: col)
                     }
                     self.fadeAndClear(canvasView)
@@ -113,10 +113,6 @@ struct PencilInputOverlay: UIViewRepresentable {
                 canvasView.drawing = PKDrawing()
                 canvasView.alpha = 1.0
             })
-        }
-
-        func eraseAll(_ canvasView: PKCanvasView) {
-            canvasView.drawing = PKDrawing()
         }
     }
 }
