@@ -143,15 +143,27 @@ class SudokuBoard: ObservableObject {
             cells[row][col].highlight = .correct
             cells[row][col].playerValue = number
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
-                self?.cells[row][col].highlight = .none
+                if self?.cells[row][col].highlight == .correct {
+                    self?.cells[row][col].highlight = .none
+                }
+                // In numpad mode, keep selection alive (don't clear selectedCell).
+                if self?.numpadActive != true {
+                    self?.selectedCell = nil
+                }
             }
         } else {
-            // Wrong: flash red, then fade out.
+            // Wrong: flash red, then clear the wrong value.
             cells[row][col].highlight = .wrong
             cells[row][col].playerValue = number
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
                 self?.cells[row][col].playerValue = nil
-                self?.cells[row][col].highlight = .none
+                if self?.numpadActive == true {
+                    // In numpad mode: go back to active highlight, keep selected for retry.
+                    self?.cells[row][col].highlight = .active
+                } else {
+                    self?.cells[row][col].highlight = .none
+                    self?.selectedCell = nil
+                }
             }
         }
     }

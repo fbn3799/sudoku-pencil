@@ -76,9 +76,9 @@ struct ContentView: View {
 
     private func gridSide(for size: CGSize, landscape: Bool) -> CGFloat {
         if landscape {
-            return size.height - 60
+            return size.height - 80
         } else {
-            return min(size.width - 32, size.height - 200)
+            return min(size.width - 64, size.height - 260)
         }
     }
 

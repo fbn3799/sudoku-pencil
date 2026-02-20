@@ -14,8 +14,8 @@ struct PencilInputOverlay: UIViewRepresentable {
         canvas.backgroundColor = .clear
         canvas.isOpaque = false
         canvas.drawingPolicy = .pencilOnly
-        updateTool(canvas, context: context)
         canvas.delegate = context.coordinator
+        applyTool(canvas)
         return canvas
     }
 
@@ -25,10 +25,18 @@ struct PencilInputOverlay: UIViewRepresentable {
         context.coordinator.board = board
         context.coordinator.noteMode = noteMode
         context.coordinator.isNoteMode = noteMode.isActive
-        updateTool(uiView, context: context)
+
+        applyTool(uiView)
+
+        // In numpad mode, disable drawing entirely but keep tap-through for cell selection.
+        if board.numpadActive && !noteMode.isActive {
+            uiView.isUserInteractionEnabled = false
+        } else {
+            uiView.isUserInteractionEnabled = true
+        }
     }
 
-    private func updateTool(_ canvas: PKCanvasView, context: Context) {
+    private func applyTool(_ canvas: PKCanvasView) {
         if noteMode.isActive {
             if noteMode.isErasing {
                 canvas.tool = PKEraserTool(.vector)
@@ -36,7 +44,7 @@ struct PencilInputOverlay: UIViewRepresentable {
                 canvas.tool = PKInkingTool(.pen, color: UIColor(noteMode.selectedColor), width: 2.5)
             }
         } else {
-            // Explicit white/black based on current color scheme.
+            // Explicit color for current scheme — white on dark, black on light.
             let color: UIColor = colorScheme == .dark ? .white : .black
             canvas.tool = PKInkingTool(.pen, color: color, width: 4)
         }
