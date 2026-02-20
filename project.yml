@@ -17,6 +17,7 @@ targets:
         TARGETED_DEVICE_FAMILY: "2"
         SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: false
         INFOPLIST_FILE: Info.plist
-        PRODUCT_BUNDLE_IDENTIFIER: com.fbn3799.sudoku-pencil
+        PRODUCT_BUNDLE_IDENTIFIER: net.fabianschneider.apps.sudoku-pencil
         SWIFT_VERSION: "5.9"
-        DEVELOPMENT_TEAM: ""
+        DEVELOPMENT_TEAM: X5K36P7932
+        CODE_SIGN_STYLE: Automatic
